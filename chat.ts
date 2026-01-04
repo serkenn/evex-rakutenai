@@ -49,14 +49,34 @@ export interface UploadedFile {
   fileUrl: string
   fileName: string
 }
+/* TODO: support multiple conversations */
 export class Thread {
   readonly id: string
   #user: User
   #ws: WebSocket
+  #streamReader: ReadableStreamDefaultReader<ChatResponseStream>
   constructor(id: string, user: User, ws: WebSocket) {
     this.id = id
     this.#user = user
+    // 時々WebSocketが切れたら繋ぎ直す?
     this.#ws = ws
+    this.#streamReader = new ReadableStream<ChatResponseStream>({
+      start: (controller) => {
+        // FIXME: 場合によっては初っ端のメッセージを取りこぼすけど知らない
+        ws.onmessage = (event) => {
+          controller.enqueue(JSON.parse(event.data) as ChatResponseStream);
+        };
+
+        ws.onerror = (error) => {
+          controller.error(error);
+        };
+
+        ws.onclose = () => {
+          controller.close();
+        };
+      },
+      cancel: () => this.#ws.close(), // 一心同体
+    }).getReader()
   }
   static async connect(id: string, user: User): Promise<Thread> {
     const WS_PATH = `/ws/v1/chat?deviceId=${encodeURIComponent(user.deviceId)}`
@@ -142,15 +162,11 @@ export class Thread {
       } satisfies ChatRequestMessage),
     )
     while (true) {
-      const chunk = await new Promise<ChatResponseStream>((resolve, reject) => {
-        this.#ws.onmessage = (event) => {
-          const data = JSON.parse(event.data) as ChatResponseStream
-          resolve(data)
-        }
-        this.#ws.onclose = (evt) => {
-          reject(evt)
-        }
-      })
+      const { value: chunk, done } = await this.#streamReader.read();
+      if (done) {
+        yield { type: 'done' } as const // 適当
+        return
+      }
       if (chunk.webSocket.type === 'ACK') {
         yield { type: 'ack' } as const
       } else if (chunk.webSocket.type === 'CONVERSATION') {
