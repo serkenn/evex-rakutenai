@@ -43,6 +43,7 @@ export class User {
       fileId: res.fileId,
       fileUrl: res.fileUrl,
       fileName: res.originalFilename,
+      isImage: Boolean(opts.isImage),
     }
   }
 }
@@ -50,6 +51,7 @@ export interface UploadedFile {
   fileId: string
   fileUrl: string
   fileName: string
+  isImage: boolean
 }
 /* TODO: support multiple conversations */
 export class Thread {
@@ -111,6 +113,13 @@ export class Thread {
     return new Thread(id, user, await Thread.connectWS(user))
   }
 
+  async uploadFile(opts: {
+    file: File
+    isImage?: boolean
+  }): Promise<UploadedFile> {
+    return this.#user.uploadFile({ file: opts.file, isImage: opts.isImage, threadId: this.id })
+  }
+
   async *sendMessage(message: {
     mode: 'USER_INPUT' | 'DEEP_THINK' | 'AI_READ'
     contents: (
@@ -122,10 +131,6 @@ export class Thread {
           type: 'file'
           file: UploadedFile
         }
-      | {
-          type: 'image'
-          file: UploadedFile
-      }
     )[]
   }): AsyncGenerator<
     | { type: 'ack' }
@@ -141,6 +146,7 @@ export class Thread {
       }> }
     | { type: 'image-thumbnail'; url: string }
     | { type: 'image'; url: string }
+    | { type: 'error'; message: string }
   > {
     const messageId = crypto.randomUUID()
     this.#ws.send(
@@ -168,7 +174,14 @@ export class Thread {
                   }
                 }
                 if (c.type === 'file') {
-                  return {
+                  if (c.file.isImage) return {
+                    contentType: 'INPUT_IMAGE',
+                    inputImageData: {
+                      src: c.file.fileUrl,
+                      resourceId: c.file.fileId,
+                    },
+                  }
+                  else return {
                     contentType: 'INPUT_FILE',
                     inputFileData: {
                       src: c.file.fileUrl,
@@ -253,7 +266,7 @@ export class Thread {
           ) {
             yield {
               type: 'tool-call',
-              data: chunk.webSocket.payload.data.contents
+              data: chunk.webSocket.payload.data.contents // FIXME: types
             }
           } else if (
             chunk.webSocket.payload.data.chatResponseStatus === 'DONE'
