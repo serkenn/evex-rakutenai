@@ -70,16 +70,27 @@ export class Thread {
         while (true) {
           try {
             // 現在のWSの終了を待機するPromiseを作成
-            const closed = new Promise((resolve, reject) => {
+            const closed = new Promise<void>((resolve, reject) => {
               // FIXME: 場合によっては初っ端のメッセージを取りこぼすけど知らない
-              this.#ws.onmessage = (e) => controller.enqueue(JSON.parse(e.data) as ChatResponseStream)
+              this.#ws.onmessage = (e) => {
+                try {
+                  controller.enqueue(JSON.parse(e.data) as ChatResponseStream)
+                } catch (err) {
+                  reject(new Error('Failed to parse message'))
+                }
+              }
               this.#ws.onerror = reject
-              this.#ws.onclose = resolve
+              this.#ws.onclose = async () => {
+                try {
+                  this.#ws = await Thread.connectWS(this.#user)
+                  resolve()
+                } catch (err) {
+                  reject(err)
+                }
+              }
             })
 
             await closed
-
-            this.#ws = await Thread.connectWS(user)
           } catch (err) {
             this.#ws.onerror = null
             this.#ws.onclose = null
