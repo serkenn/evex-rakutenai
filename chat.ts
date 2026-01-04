@@ -120,7 +120,7 @@ export class Thread {
           type: 'file'
           file: UploadedFile
         }
-      )[]
+    )[]
   }): AsyncGenerator<
     | { type: 'ack' }
     | { type: 'text-delta'; text: string }
