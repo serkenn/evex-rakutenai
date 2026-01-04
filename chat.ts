@@ -100,6 +100,10 @@ export class Thread {
           type: 'file'
           file: UploadedFile
         }
+      | {
+          type: 'image'
+          file: UploadedFile
+      }
     )[]
   }): AsyncGenerator<
     | { type: 'ack' }
