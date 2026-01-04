@@ -112,6 +112,8 @@ export class Thread {
         contentType: "TEXT" | "SUMMARY_TEXT";
         textData: { text: string; };
       }> }
+    | { type: 'image-thumbnail'; url: string }
+    | { type: 'image'; url: string }
   > {
     const messageId = crypto.randomUUID()
     this.#ws.send(
@@ -204,6 +206,12 @@ export class Thread {
                   type: 'reasoning-delta',
                   text: content.textData.text ?? '',
                 } as const
+              } else if (content.contentType === 'OUTPUT_IMAGE') {
+                const img = content.outputImageData.imageGens[0]
+                if(img) {
+                  yield { type: 'image-thumbnail', url: img.thumbnail }
+                  if(img.preview) yield { type: 'image', url: img.preview }
+                }
               } else {
                 console.warn(
                   '\n[Unsupported content type:',
