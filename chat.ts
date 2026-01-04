@@ -73,14 +73,19 @@ export class Thread {
           controller.error(error)
         };
 
-        ws.onclose = () => {
-          controller.close()
+        ws.onclose = (event) => {
+          Thread.connectWS(id, user).then(
+            (newWS) => this.#ws = newWS
+          ).catch(
+            (reason) => controller.error(reason)
+          )
         };
       },
       cancel: () => this.#ws.close(), // 一心同体
     }).getReader()
   }
-  static async connect(id: string, user: User): Promise<Thread> {
+
+  static async connectWS(id: string, user: User): Promise<WebSocket> {
     const WS_PATH = `/ws/v1/chat?deviceId=${encodeURIComponent(user.deviceId)}`
     const url = await getSignedWsUrl(WS_PATH, user.accessToken)
     const ws = new WebSocket(url)
@@ -88,7 +93,11 @@ export class Thread {
       ws.onopen = () => resolve()
       ws.onerror = reject
     })
-    return new Thread(id, user, ws)
+    return ws
+  }
+
+  static async connect(id: string, user: User): Promise<Thread> {
+    return new Thread(id, user, await Thread.connectWS(id, user))
   }
 
   async *sendMessage(message: {
@@ -120,6 +129,7 @@ export class Thread {
         contentType: "TEXT" | "SUMMARY_TEXT";
         textData: { text: string; };
       }> }
+    | { type: 'disconnected' }
   > {
     const messageId = crypto.randomUUID()
     this.#ws.send(
@@ -175,8 +185,8 @@ export class Thread {
     )
     while (true) {
       const { value: chunk, done } = await this.#streamReader.read();
-      if (done) {
-        yield { type: 'done' } as const // 適当
+      if (done) { // 自動で再接続するのでこれが流れるはずは無い
+        yield { type: 'disconnected' } as const
         return
       }
       if (chunk.webSocket.type === 'ACK') {
