@@ -135,6 +135,7 @@ export class Thread {
         textData: { text: string; };
       }> }
     | { type: 'disconnected' }
+    | { type: 'error'; message: string }
   > {
     const messageId = crypto.randomUUID()
     this.#ws.send(
