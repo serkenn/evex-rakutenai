@@ -43,6 +43,7 @@ export class User {
       fileId: res.fileId,
       fileUrl: res.fileUrl,
       fileName: res.originalFilename,
+      isImage: Boolean(opts.isImage),
     }
   }
 }
@@ -50,6 +51,7 @@ export interface UploadedFile {
   fileId: string
   fileUrl: string
   fileName: string
+  isImage: boolean
 }
 /* TODO: support multiple conversations */
 export class Thread {
@@ -103,7 +105,7 @@ export class Thread {
   async uploadFile(opts: {
     file: File
     isImage?: boolean
-  }) {
+  }): Promise<UploadedFile> {
     return this.#user.uploadFile({ file: opts.file, isImage: opts.isImage, threadId: this.id })
   }
 
@@ -160,7 +162,14 @@ export class Thread {
                   }
                 }
                 if (c.type === 'file') {
-                  return {
+                  if (c.file.isImage) return {
+                    contentType: 'INPUT_IMAGE',
+                    inputImageData: {
+                      src: c.file.fileUrl,
+                      resourceId: c.file.fileId,
+                    },
+                  }
+                  else return {
                     contentType: 'INPUT_FILE',
                     inputFileData: {
                       src: c.file.fileUrl,
@@ -245,7 +254,7 @@ export class Thread {
           ) {
             yield {
               type: 'tool-call',
-              data: chunk.webSocket.payload.data.contents
+              data: chunk.webSocket.payload.data.contents // FIXME: types
             }
           } else if (
             chunk.webSocket.payload.data.chatResponseStatus === 'DONE'
