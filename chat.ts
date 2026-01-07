@@ -314,6 +314,7 @@ export class Thread {
           type: 'error',
           ...chunk.webSocket.error,
         }
+        return
       } else {
         console.warn('Received non-conversation message:', chunk.webSocket)
       }
